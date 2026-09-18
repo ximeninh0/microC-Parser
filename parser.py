@@ -15,6 +15,10 @@ from ast_nodes import (
     Stmt,
     StringLiteral,
     TypeName,
+    CallStmt,
+    CallExpr,
+    Assignment,
+    IdentifierExpr
 )
 
 
@@ -167,24 +171,21 @@ class Parser:
         )
 
     # type ::= KW_INT | KW_BOOL | KW_VOID
-    def parse_type(self) -> TypeName:
+    def parse_type(self) -> TypeName: # int bool void
         token = self.expect(TYPE_START)
         return TYPE_BY_TOKEN[token.kind]
 
     def parse_parameter_list(self) -> list[Parameter]:
-        start = self.peek() # acho que o start não é necessário nesse caso
-
-        first_parameter = self.parse_parameter()
+        start = self.parse_parameter()
         
         parameters = []
-        parameters.append(first_parameter)
+        parameters.append(start)
 
         while self.match(TokenKind.COMMA):
             parameter = self.parse_parameter()
             parameters.append(parameter)
 
         return parameters
-        # raise NotImplementedError("implemente parameter_list")
 
     def parse_parameter(self) -> Parameter:
         start = self.peek()
@@ -192,17 +193,56 @@ class Parser:
         name = self.expect(TokenKind.IDENTIFIER)
         
         return Parameter(param_type, name.lexeme, span = self._span(start,name))
-        # raise NotImplementedError("implemente parameter")
 
     def parse_block(self) -> Block:
-        raise NotImplementedError("implemente block")
+        start = self.expect(TokenKind.LEFT_BRACE)
+        statements: list[Stmt] = []
+
+        while not self.check(TokenKind.RIGHT_BRACE) and not self.check(TokenKind.EOF):
+            statements.append(self.parse_statement())
+
+        end = self.expect(TokenKind.RIGHT_BRACE)
+        return Block(statements, span=self._span(start, end))
 
     def parse_statement(self) -> Stmt:
-        raise NotImplementedError("implemente statement")
+        start = self.peek()
+
+        if start.kind in TYPE_START:
+            self.parse_declaration()
+        elif start.kind is TokenKind.IDENTIFIER:
+            self.parse_id_or_call_statement()
+        elif start.kind is TokenKind.KW_IF:
+            self.parse_if_statement()
+        elif start.kind is TokenKind.KW_WHILE:
+            self.parse_while_statement()
+        elif start.kind is TokenKind.KW_RETURN:
+            self.parse_return_statement()
+        elif start.kind is TokenKind.KW_PRINT:
+            self.parse_print_statement()
+        elif start.kind is TokenKind.LEFT_BRACE:
+            self.parse_block()
+        else:
+            raise ParserError(start, STATEMENT_START)
 
     def parse_id_or_call_statement(self) -> Stmt:
-        raise NotImplementedError("implemente id_or_call_statement")
+        start = self.expect(TokenKind.IDENTIFIER)
 
+        if self.match(TokenKind.ASSIGN): # x = 10;
+            expression = self.parse_expression()
+            semicolon = self.expect(TokenKind.SEMICOLON)
+            target = IdentifierExpr(start.lexeme, span=self._span(start, semicolon))
+            return Assignment(target, expression, span=self._span(start, semicolon))
+
+        elif self.match(TokenKind.LEFT_PAREN): # funcao(argumento);
+            arguments = self.parse_arguments()
+            rightParen = self.expect(TokenKind.RIGHT_PAREN)
+            expression = CallExpr(start.lexeme, arguments, span=self._span(start, rightParen))
+            semicolon = self.expect(TokenKind.SEMICOLON)
+            return CallStmt(expression, span=self._span(start, semicolon))
+        
+        else:
+            raise ParserError(self.peek(),[TokenKind.ASSIGN, TokenKind.LEFT_PAREN])
+            
     def parse_declaration(self) -> Stmt:
         raise NotImplementedError("implemente declaration")
 
@@ -225,6 +265,31 @@ class Parser:
         raise NotImplementedError("implemente string_literals")
 
     def parse_expression(self) -> Expr:
+        # a = 10;
+        # booleano = true ou false
+        # inteiro = 10
+        # valor = (coisas)
+        # valor = !naoCoisas && coisas
+        # valor = -menosCoisas
+        
+        # TODO: o que vai ser isso daqui? - ximeninh0
+
+        # start = self.peek()
+
+        # if self.match(TokenKind.IDENTIFIER):
+        #     if self.match(TokenKind.PLUS): self.parse_additive()
+        #     elif self.match(TokenKind.MINUS): self.parse_s
+        # elif self.match(TokenKind.KW_BOOL):
+        # elif self.match(TokenKind.INT_LITERAL):
+        # elif self.match(TokenKind.LEFT_PAREN):
+        # elif self.match(TokenKind.LOGICAL_NOT):
+        # elif self.match(TokenKind.MINUS):
+        
+        # else:
+        #     ParserError(start, EXPRESSION_START)
+
+
+
         raise NotImplementedError("implemente expression")
 
     def parse_logical_or(self) -> Expr:
@@ -252,5 +317,11 @@ class Parser:
         raise NotImplementedError("implemente primary")
 
     def parse_arguments(self) -> list[Expr]:
-        raise NotImplementedError("implemente arguments")
+        start = self.peek()
+        arguments = []
 
+        while not self.check(TokenKind.RIGHT_PAREN):
+            argument = Expr(span=self._span(start,self.expect(TokenKind.IDENTIFIER))) 
+            arguments.append(argument)
+
+        return arguments
