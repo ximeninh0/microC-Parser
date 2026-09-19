@@ -4,9 +4,17 @@ from collections.abc import Sequence
 
 from Lexer import Token, TokenKind
 from ast_nodes import (
+    Assignment,
+    BinaryExpr,
+    BinaryOperator,
     Block,
+    BoolLiteral,
+    CallExpr,
+    CallStmt,
     Expr,
     FunctionDecl,
+    IdentifierExpr,
+    IntLiteral,
     Node,
     Parameter,
     PrintItem,
@@ -15,10 +23,8 @@ from ast_nodes import (
     Stmt,
     StringLiteral,
     TypeName,
-    CallStmt,
-    CallExpr,
-    Assignment,
-    IdentifierExpr
+    UnaryExpr,
+    UnaryOperator,
 )
 
 
@@ -272,95 +278,72 @@ class Parser:
     def parse_expression(self) -> Expr:
         return self.parse_logical_or() # checar gramática!
 
-        # a = 10;
-        # booleano = true ou false
-        # inteiro = 10
-        # valor = (coisas)
-        # valor = !naoCoisas && coisas
-        # valor = -menosCoisas
-        
-        # TODO: o que vai ser isso daqui? - ximeninh0
-
-        # start = self.peek()
-
-        # if self.match(TokenKind.IDENTIFIER):
-        #     if self.match(TokenKind.PLUS): self.parse_additive()
-        #     elif self.match(TokenKind.MINUS): self.parse_s
-        # elif self.match(TokenKind.KW_BOOL):
-        # elif self.match(TokenKind.INT_LITERAL):
-        # elif self.match(TokenKind.LEFT_PAREN):
-        # elif self.match(TokenKind.LOGICAL_NOT):
-        # elif self.match(TokenKind.MINUS):
-        
-        # else:
-        #     ParserError(start, EXPRESSION_START)
-
-
-
-        # raise NotImplementedError("implemente expression")
-
     def parse_logical_or(self) -> Expr:
         first = self.parse_logical_and()
 
         while self.match(TokenKind.LOGICAL_OR):
             second = self.parse_logical_and()
-            # TODO: chamar alguma coisa que junta first e second (para todos de expr) - ximeninh0
+            first = BinaryExpr(BinaryOperator.LOGICAL_OR, first, second, span=self._span(first, second))
         return first
-        # raise NotImplementedError("implemente logical_or")
 
     def parse_logical_and(self) -> Expr:
         first = self.parse_equality()
 
         while self.match(TokenKind.LOGICAL_AND):
             second = self.parse_equality()
-
+            first = BinaryExpr(BinaryOperator.LOGICAL_AND, first, second, span=self._span(first, second))
         return first
-        # raise NotImplementedError("implemente logical_and")
 
     def parse_equality(self) -> Expr:
         first = self.parse_relational()
 
-        while self.match([TokenKind.EQUAL_EQUAL,TokenKind.NOT_EQUAL]):
+        while token := self.match(TokenKind.EQUAL_EQUAL, TokenKind.NOT_EQUAL):
+            operator = BinaryOperator.EQUAL if token.kind is TokenKind.EQUAL_EQUAL else BinaryOperator.NOT_EQUAL
             second = self.parse_relational()
-
+            first = BinaryExpr(operator, first, second, span=self._span(first, second))
         return first
-        # raise NotImplementedError("implemente equality")
 
     def parse_relational(self) -> Expr:
         first = self.parse_additive()
 
-        while self.match([TokenKind.LESS,TokenKind.LESS_EQUAL,TokenKind.GREATER,TokenKind.GREATER_EQUAL]):
+        while token := self.match(TokenKind.LESS, TokenKind.LESS_EQUAL, TokenKind.GREATER, TokenKind.GREATER_EQUAL):
+            match token.kind:
+                case TokenKind.LESS:           operator = BinaryOperator.LESS
+                case TokenKind.LESS_EQUAL:     operator = BinaryOperator.LESS_EQUAL
+                case TokenKind.GREATER:        operator = BinaryOperator.GREATER
+                case _:                        operator = BinaryOperator.GREATER_EQUAL
             second = self.parse_additive()
-
+            first = BinaryExpr(operator, first, second, span=self._span(first, second))
         return first
-        # raise NotImplementedError("implemente relational")
 
     def parse_additive(self) -> Expr:
         first = self.parse_multiplicative()
 
-        while self.match([TokenKind.PLUS, TokenKind.MINUS]):
+        while token := self.match(TokenKind.PLUS, TokenKind.MINUS):
+            operator = BinaryOperator.ADD if token.kind is TokenKind.PLUS else BinaryOperator.SUBTRACT
             second = self.parse_multiplicative()
-
+            first = BinaryExpr(operator, first, second, span=self._span(first, second))
         return first
-        # raise NotImplementedError("implemente additive")
 
     def parse_multiplicative(self) -> Expr:
         first = self.parse_unary()
 
-        while self.match([TokenKind.STAR,TokenKind.SLASH,TokenKind.PERCENT]):
+        while token := self.match(TokenKind.STAR, TokenKind.SLASH, TokenKind.PERCENT):
+            match token.kind:
+                case TokenKind.STAR:    operator = BinaryOperator.MULTIPLY
+                case TokenKind.SLASH:   operator = BinaryOperator.DIVIDE
+                case _:                 operator = BinaryOperator.REMAINDER
             second = self.parse_unary()
-
+            first = BinaryExpr(operator, first, second, span=self._span(first, second))
         return first
-        # raise NotImplementedError("implemente multiplicative")
 
     def parse_unary(self) -> Expr:
-        if self.match([TokenKind.LOGICAL_NOT,TokenKind.MINUS]):
-            # second = self.parse_unary()
-            second = self.parse_primary()
-            return second
-        else:
-            raise ParserError(self.peek(),[TokenKind.LOGICAL_NOT,TokenKind.MINUS])
-        # raise NotImplementedError("implemente unary")
+        if token := self.match(TokenKind.LOGICAL_NOT, TokenKind.MINUS):
+            operator = UnaryOperator.NOT if token.kind is TokenKind.LOGICAL_NOT else UnaryOperator.NEGATE
+            operand = self.parse_unary()
+            return UnaryExpr(operator, operand, span=self._span(token, operand))
+        return self.parse_primary()
+
 
     def parse_primary(self) -> Expr:
         # primary ::= LEFT_PAREN expression RIGHT_PAREN
@@ -371,28 +354,32 @@ class Parser:
         if self.match(TokenKind.LEFT_PAREN):
             expr = self.parse_expression()
             self.expect(TokenKind.RIGHT_PAREN)
-        elif self.match(TokenKind.IDENTIFIER):
-            self.parse_id_or_call_statement()
+            return expr
+
+        if id_token := self.match(TokenKind.IDENTIFIER):
             if self.match(TokenKind.LEFT_PAREN):
                 args = self.parse_arguments()
-                self.expect(TokenKind.RIGHT_PAREN)
-        elif self.match(TokenKind.INT_LITERAL):
-            #literal
-            integer = self.peek()
-        elif self.match(TokenKind.KW_TRUE):
-            true_val = self.peek()
-        elif self.match(TokenKind.KW_FALSE):
-            false_val = self.peek()
+                right = self.expect(TokenKind.RIGHT_PAREN)
+                return CallExpr(id_token.lexeme, args, span=self._span(id_token, right))
+            return IdentifierExpr(id_token.lexeme, span=self._token_span(id_token))
 
-        raise ParserError(self.peek(),[TokenKind.LEFT_PAREN,TokenKind.IDENTIFIER,TokenKind.INT_LITERAL,TokenKind.KW_TRUE,TokenKind.KW_FALSE])
-        raise NotImplementedError("implemente primary")
+        if int_token := self.match(TokenKind.INT_LITERAL):
+            return IntLiteral(int(int_token.lexeme), span=self._token_span(int_token))
+
+        if true_token := self.match(TokenKind.KW_TRUE):
+            return BoolLiteral(True, span=self._token_span(true_token))
+
+        if false_token := self.match(TokenKind.KW_FALSE):
+            return BoolLiteral(False, span=self._token_span(false_token))
+
+        raise ParserError(self.peek(), {TokenKind.LEFT_PAREN, TokenKind.IDENTIFIER, TokenKind.INT_LITERAL, TokenKind.KW_TRUE, TokenKind.KW_FALSE})
 
     def parse_arguments(self) -> list[Expr]:
-        start = self.peek()
         arguments = []
 
-        while not self.check(TokenKind.RIGHT_PAREN):
-            argument = Expr(span=self._span(start,self.expect(TokenKind.IDENTIFIER))) 
-            arguments.append(argument)
+        if not self.check(TokenKind.RIGHT_PAREN):
+            arguments.append(self.parse_expression())
+            while self.match(TokenKind.COMMA):
+                arguments.append(self.parse_expression())
 
         return arguments
