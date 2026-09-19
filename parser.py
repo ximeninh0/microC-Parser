@@ -85,24 +85,29 @@ class Parser:
             raise ValueError("EOF deve aparecer uma única vez, no final")
         self.current = 0
 
+    # Espiada, isso daqui náo avança e nem retorna erro, só o token do cursor
     def peek(self, offset: int = 0) -> Token:
         index = min(self.current + offset, len(self.tokens) - 1)
         return self.tokens[index]
 
+    # Esse aqui retorna se é ou não o token, não consome
     def check(self, kind: TokenKind) -> bool:
         return self.peek().kind is kind
 
+    # Consome o token, move o cursor
     def advance(self) -> Token:
         token = self.peek()
         if self.current < len(self.tokens) - 1:
             self.current += 1
         return token
 
+    # Vê se bate com o token, não gera erro se der ruim e consome 
     def match(self, *kinds: TokenKind) -> Token | None:
         if self.peek().kind in kinds:
             return self.advance()
         return None
 
+    # Consome, se não for o token retorna erro
     def expect(self, kinds: TokenKind | set[TokenKind]) -> Token:
         expected = kinds if isinstance(kinds, set) else {kinds}
         token = self.peek()
@@ -265,6 +270,8 @@ class Parser:
         raise NotImplementedError("implemente string_literals")
 
     def parse_expression(self) -> Expr:
+        return self.parse_logical_or() # checar gramática!
+
         # a = 10;
         # booleano = true ou false
         # inteiro = 10
@@ -290,30 +297,94 @@ class Parser:
 
 
 
-        raise NotImplementedError("implemente expression")
+        # raise NotImplementedError("implemente expression")
 
     def parse_logical_or(self) -> Expr:
-        raise NotImplementedError("implemente logical_or")
+        first = self.parse_logical_and()
+
+        while self.match(TokenKind.LOGICAL_OR):
+            second = self.parse_logical_and()
+            # TODO: chamar alguma coisa que junta first e second (para todos de expr) - ximeninh0
+        return first
+        # raise NotImplementedError("implemente logical_or")
 
     def parse_logical_and(self) -> Expr:
-        raise NotImplementedError("implemente logical_and")
+        first = self.parse_equality()
+
+        while self.match(TokenKind.LOGICAL_AND):
+            second = self.parse_equality()
+
+        return first
+        # raise NotImplementedError("implemente logical_and")
 
     def parse_equality(self) -> Expr:
-        raise NotImplementedError("implemente equality")
+        first = self.parse_relational()
+
+        while self.match([TokenKind.EQUAL_EQUAL,TokenKind.NOT_EQUAL]):
+            second = self.parse_relational()
+
+        return first
+        # raise NotImplementedError("implemente equality")
 
     def parse_relational(self) -> Expr:
-        raise NotImplementedError("implemente relational")
+        first = self.parse_additive()
+
+        while self.match([TokenKind.LESS,TokenKind.LESS_EQUAL,TokenKind.GREATER,TokenKind.GREATER_EQUAL]):
+            second = self.parse_additive()
+
+        return first
+        # raise NotImplementedError("implemente relational")
 
     def parse_additive(self) -> Expr:
-        raise NotImplementedError("implemente additive")
+        first = self.parse_multiplicative()
+
+        while self.match([TokenKind.PLUS, TokenKind.MINUS]):
+            second = self.parse_multiplicative()
+
+        return first
+        # raise NotImplementedError("implemente additive")
 
     def parse_multiplicative(self) -> Expr:
-        raise NotImplementedError("implemente multiplicative")
+        first = self.parse_unary()
+
+        while self.match([TokenKind.STAR,TokenKind.SLASH,TokenKind.PERCENT]):
+            second = self.parse_unary()
+
+        return first
+        # raise NotImplementedError("implemente multiplicative")
 
     def parse_unary(self) -> Expr:
-        raise NotImplementedError("implemente unary")
+        if self.match([TokenKind.LOGICAL_NOT,TokenKind.MINUS]):
+            # second = self.parse_unary()
+            second = self.parse_primary()
+            return second
+        else:
+            raise ParserError(self.peek(),[TokenKind.LOGICAL_NOT,TokenKind.MINUS])
+        # raise NotImplementedError("implemente unary")
 
     def parse_primary(self) -> Expr:
+        # primary ::= LEFT_PAREN expression RIGHT_PAREN
+        #   | IDENTIFIER (LEFT_PAREN arguments RIGHT_PAREN)?
+        #   | INT_LITERAL
+        #   | KW_TRUE
+        #   | KW_FALSE
+        if self.match(TokenKind.LEFT_PAREN):
+            expr = self.parse_expression()
+            self.expect(TokenKind.RIGHT_PAREN)
+        elif self.match(TokenKind.IDENTIFIER):
+            self.parse_id_or_call_statement()
+            if self.match(TokenKind.LEFT_PAREN):
+                args = self.parse_arguments()
+                self.expect(TokenKind.RIGHT_PAREN)
+        elif self.match(TokenKind.INT_LITERAL):
+            #literal
+            integer = self.peek()
+        elif self.match(TokenKind.KW_TRUE):
+            true_val = self.peek()
+        elif self.match(TokenKind.KW_FALSE):
+            false_val = self.peek()
+
+        raise ParserError(self.peek(),[TokenKind.LEFT_PAREN,TokenKind.IDENTIFIER,TokenKind.INT_LITERAL,TokenKind.KW_TRUE,TokenKind.KW_FALSE])
         raise NotImplementedError("implemente primary")
 
     def parse_arguments(self) -> list[Expr]:
