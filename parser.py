@@ -29,6 +29,7 @@ from ast_nodes import (
     UnaryOperator,
     VarDecl,
     WhileStmt,
+    PrintStmt,
 )
 
 
@@ -223,19 +224,19 @@ class Parser:
         start = self.peek()
 
         if start.kind in TYPE_START:
-            self.parse_declaration()
+            return self.parse_declaration()
         elif start.kind is TokenKind.IDENTIFIER:
-            self.parse_id_or_call_statement()
+            return self.parse_id_or_call_statement()
         elif start.kind is TokenKind.KW_IF:
-            self.parse_if_statement()
+            return self.parse_if_statement()
         elif start.kind is TokenKind.KW_WHILE:
-            self.parse_while_statement()
+            return self.parse_while_statement()
         elif start.kind is TokenKind.KW_RETURN:
-            self.parse_return_statement()
+            return self.parse_return_statement()
         elif start.kind is TokenKind.KW_PRINT:
-            self.parse_print_statement()
+            return self.parse_print_statement()
         elif start.kind is TokenKind.LEFT_BRACE:
-            self.parse_block()
+            return self.parse_block()
         else:
             raise ParserError(start, STATEMENT_START)
 
@@ -296,13 +297,52 @@ class Parser:
         return ReturnStmt(value, span=self._span(start, semicolon))
 
     def parse_print_statement(self) -> Stmt:
-        raise NotImplementedError("implemente print_statement")
+        start = self.peek()
+
+        print_items = []
+
+        self.expect(TokenKind.KW_PRINT)
+        self.expect(TokenKind.LEFT_PAREN)
+
+        print_item = self.parse_print_item()
+        print_items.append(print_item)
+
+        while self.match(TokenKind.COMMA):
+            print_item = self.parse_print_item()
+            print_items.append(print_item)
+
+        self.expect(TokenKind.RIGHT_PAREN)
+        semicolon = self.expect(TokenKind.SEMICOLON)
+
+        return PrintStmt(print_items,span=self._span(start,semicolon))
+        # raise NotImplementedError("implemente print_statement")
 
     def parse_print_item(self) -> PrintItem:
-        raise NotImplementedError("implemente print_item")
+        start = self.peek()
+        item = None
+        
+        if start.kind == TokenKind.STRING_LITERAL:
+            item = self.parse_string_literals()
+        else: 
+            item = self.parse_expression()
+
+        return item
+        # raise NotImplementedError("implemente print_item")
 
     def parse_string_literals(self) -> StringLiteral:
-        raise NotImplementedError("implemente string_literals")
+        start = self.peek()
+
+        first_string = self.expect(TokenKind.STRING_LITERAL)
+        string_text = first_string.value
+        last_string = first_string
+
+        while self.check(TokenKind.STRING_LITERAL):
+            string = self.match(TokenKind.STRING_LITERAL)
+            string_text += string.value
+            last_string = string
+
+        return StringLiteral(string_text,span=self._span(start,last_string))
+        # raise NotImplementedError("implemente string_literals")
 
     def parse_expression(self) -> Expr:
         return self.parse_logical_or() # checar gramática!
