@@ -315,7 +315,6 @@ class Parser:
         semicolon = self.expect(TokenKind.SEMICOLON)
 
         return PrintStmt(print_items,span=self._span(start,semicolon))
-        # raise NotImplementedError("implemente print_statement")
 
     def parse_print_item(self) -> PrintItem:
         start = self.peek()
@@ -327,7 +326,6 @@ class Parser:
             item = self.parse_expression()
 
         return item
-        # raise NotImplementedError("implemente print_item")
 
     def parse_string_literals(self) -> StringLiteral:
         start = self.peek()
@@ -342,7 +340,6 @@ class Parser:
             last_string = string
 
         return StringLiteral(string_text,span=self._span(start,last_string))
-        # raise NotImplementedError("implemente string_literals")
 
     def parse_expression(self) -> Expr:
         return self.parse_logical_or() # checar gramática!
@@ -415,11 +412,6 @@ class Parser:
 
 
     def parse_primary(self) -> Expr:
-        # primary ::= LEFT_PAREN expression RIGHT_PAREN
-        #   | IDENTIFIER (LEFT_PAREN arguments RIGHT_PAREN)?
-        #   | INT_LITERAL
-        #   | KW_TRUE
-        #   | KW_FALSE
         if self.match(TokenKind.LEFT_PAREN):
             expr = self.parse_expression()
             self.expect(TokenKind.RIGHT_PAREN)
